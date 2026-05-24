@@ -143,6 +143,14 @@
   cursor: default; box-shadow: none;
 }
 .zoh-card.stub:hover { box-shadow: none; border-color: var(--zoh-border-strong); }
+.zoh-card.just-assigned {
+  animation: zoh-card-flash 1.2s ease-out 4;
+  border-color: var(--zoh-success) !important;
+}
+@keyframes zoh-card-flash {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(22,163,74,0); }
+  50%      { box-shadow: 0 0 0 6px rgba(22,163,74,.22); }
+}
 
 .zoh-card-top { display: flex; gap: 12px; padding: 12px 14px; align-items: flex-start; }
 .zoh-card-left { flex: 1; min-width: 0; }

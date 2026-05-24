@@ -84,16 +84,35 @@ function hasRider(o) {
 }
 
 let audioCtx = null;
-function playRiderChime() {
-  if (muted) return;
+
+// Prime the AudioContext on any user gesture so Chrome's autoplay policy
+// doesn't silently swallow the first chime. Without this, a chime that
+// fires before the user has clicked anywhere will be inaudible.
+function primeAudio() {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  } catch (_) {}
+}
+['click', 'keydown', 'touchstart'].forEach((evt) => {
+  document.addEventListener(evt, primeAudio, { capture: true, passive: true });
+});
+
+function playRiderChime() {
+  if (muted) { console.log('[ZOH] chime suppressed (muted)'); return; }
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') {
+      console.warn('[ZOH] AudioContext is suspended — click anywhere on the page once to unlock sound.');
+      audioCtx.resume().catch(() => {});
+    }
     const t0 = audioCtx.currentTime;
-    // Two-note rising chime: A5 → E6
+    // Two-note rising chime: A5 → E6, played twice for prominence
     const notes = [
-      { f: 880,  s: 0.00, d: 0.20 },
-      { f: 1319, s: 0.13, d: 0.34 }
+      { f: 880,  s: 0.00, d: 0.22 },
+      { f: 1319, s: 0.14, d: 0.36 },
+      { f: 880,  s: 0.55, d: 0.22 },
+      { f: 1319, s: 0.69, d: 0.36 }
     ];
     for (const n of notes) {
       const osc = audioCtx.createOscillator();
@@ -102,14 +121,15 @@ function playRiderChime() {
       osc.frequency.value = n.f;
       const start = t0 + n.s;
       gain.gain.setValueAtTime(0, start);
-      gain.gain.linearRampToValueAtTime(0.22, start + 0.02);
+      gain.gain.linearRampToValueAtTime(0.32, start + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.0001, start + n.d);
       osc.connect(gain).connect(audioCtx.destination);
       osc.start(start);
       osc.stop(start + n.d + 0.05);
     }
+    console.log('[ZOH] 🛵 chime played');
   } catch (e) {
-    if (DEBUG) console.warn('[ZOH] chime failed', e);
+    console.warn('[ZOH] chime failed', e);
   }
 }
 const GROUPS = [
@@ -162,16 +182,25 @@ function mergeOrders(list, source) {
     ordersById.set(key, merged);
     added++;
 
-    // Rider-assignment transition detection — only counts when we have real data.
-    // First real observation just records baseline; chime fires only on no→yes flip.
-    const isRealData = !!(merged.creator || merged.cartDetails);
-    if (isRealData) {
+    // Rider-assignment transition detection — counts when we have any field
+    // that lets us judge rider state (creator/cart present, or riderAssigned
+    // boolean, or supportingRiderDetails). First real observation records a
+    // baseline silently; chime fires only on a no→yes flip within the session.
+    const canJudgeRider = !!(
+      merged.creator ||
+      merged.cartDetails ||
+      merged.riderAssigned !== undefined ||
+      merged.supportingRiderDetails
+    );
+    if (canJudgeRider) {
       const nowHas = hasRider(merged);
       const lastHad = lastRiderState.get(key);
       if (lastHad === undefined) {
+        console.log(`[ZOH] #${merged.displayId || key}: first observation, rider=${nowHas} (baseline — no chime)`);
         lastRiderState.set(key, nowHas);
       } else if (!lastHad && nowHas) {
         transitions.push(merged);
+        merged._zohJustAssigned = now;
         lastRiderState.set(key, nowHas);
       } else if (lastHad !== nowHas) {
         lastRiderState.set(key, nowHas);
@@ -179,8 +208,8 @@ function mergeOrders(list, source) {
     }
   }
   if (transitions.length) {
+    console.log(`[ZOH] 🛵 RIDER ASSIGNED for #${transitions.map((o) => o.displayId || o.id).join(', ')}`);
     playRiderChime();
-    if (DEBUG) console.log(`[ZOH] rider assigned: ${transitions.map((o) => o.id).join(', ')}`);
   }
   persistRiderState();
   lastUpdateAt = now;
@@ -592,10 +621,13 @@ function renderCard(o) {
 
   const hasRiderNow = !!rider || !!o.riderAssigned;
   const needsRider = ['NEW','ACCEPTED','PREPARING','READY'].includes(o.state);
+  // Flash the card for 8s after a rider was just assigned this session
+  const justAssigned = o._zohJustAssigned && (Date.now() - o._zohJustAssigned < 8000);
   const articleClass = [
     'zoh-card',
     isExpanded ? 'expanded' : '',
-    hasRiderNow ? 'has-rider' : (needsRider ? 'no-rider' : '')
+    hasRiderNow ? 'has-rider' : (needsRider ? 'no-rider' : ''),
+    justAssigned ? 'just-assigned' : ''
   ].filter(Boolean).join(' ');
 
   return `

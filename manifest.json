@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Zomato Partner Order Helper",
   "short_name": "Order Helper",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "See all active Zomato Partner orders in one panel — customer, items, OTP, rider ETA, and an audible alert when a rider is assigned.",
   "host_permissions": [
     "https://www.zomato.com/partners/*"
