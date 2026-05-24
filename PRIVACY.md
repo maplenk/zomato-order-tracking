@@ -27,7 +27,7 @@ All order data lives only in your tab's memory and is discarded when the tab clo
 
 ## Permissions
 
-- `host_permissions: https://www.zomato.com/*` — required so the extension can run on the partner dashboard and read order responses.
+- `host_permissions: https://www.zomato.com/partners/*` — scoped strictly to the partner dashboard. The extension does not run on any other Zomato page.
 
 ## Contact
 

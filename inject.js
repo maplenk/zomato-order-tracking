@@ -1,6 +1,8 @@
 (function () {
-  const SINGLE_ORDER_URL_RE = /getOrder|order\/details|order_id=|\/o2_api\/.*order/i;
-  const ORDERS_LIST_URL_RE  = /\/merchant-api\/orders\/get-all/i;
+  // Strictly scoped to the two merchant-api endpoints we know carry order data.
+  // Don't body-inspect arbitrary JSON responses — keeps blast radius minimal.
+  const SINGLE_ORDER_URL_RE = /\/merchant-api\/orders\/(order-details|getOrder)\b/i;
+  const ORDERS_LIST_URL_RE  = /\/merchant-api\/orders\/get-all\b/i;
 
   // ── Shape helpers ─────────────────────────────────────────────────────────
   function looksLikeSingleOrder(json) {
@@ -54,8 +56,6 @@
   function handleResponseBody(url, json) {
     if (SINGLE_ORDER_URL_RE.test(url)) forwardSingle(json);
     if (ORDERS_LIST_URL_RE.test(url)) forwardList(json, url);
-    // Generic fallback: anything that looks like a single order, forward it
-    if (looksLikeSingleOrder(json)) forwardSingle(json);
   }
 
   // ── Patch fetch ──────────────────────────────────────────────────────────
@@ -64,12 +64,7 @@
     const res = await origFetch.apply(this, args);
     try {
       const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
-      const ct = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
-      if (
-        SINGLE_ORDER_URL_RE.test(url) ||
-        ORDERS_LIST_URL_RE.test(url) ||
-        /json/i.test(ct)
-      ) {
+      if (SINGLE_ORDER_URL_RE.test(url) || ORDERS_LIST_URL_RE.test(url)) {
         res.clone().json().then((j) => handleResponseBody(url, j)).catch(() => {});
       }
     } catch (_) {}
@@ -87,12 +82,7 @@
       try {
         const isText = xhr.responseType === '' || xhr.responseType === 'text';
         if (!isText) return;
-        const ct = (xhr.getResponseHeader && xhr.getResponseHeader('content-type')) || '';
-        if (
-          SINGLE_ORDER_URL_RE.test(_url) ||
-          ORDERS_LIST_URL_RE.test(_url) ||
-          /json/i.test(ct)
-        ) {
+        if (SINGLE_ORDER_URL_RE.test(_url) || ORDERS_LIST_URL_RE.test(_url)) {
           handleResponseBody(_url, JSON.parse(xhr.responseText));
         }
       } catch (_) {}
@@ -100,6 +90,10 @@
     return xhr;
   }
   PatchedXHR.prototype = OrigXHR.prototype;
+  // Preserve the readyState constants page code may reference
+  for (const k of ['UNSENT', 'OPENED', 'HEADERS_RECEIVED', 'LOADING', 'DONE']) {
+    if (k in OrigXHR) PatchedXHR[k] = OrigXHR[k];
+  }
   window.XMLHttpRequest = PatchedXHR;
 
   // ── window.store bridge (live Redux feed) ────────────────────────────────

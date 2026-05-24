@@ -530,6 +530,16 @@ function escapeHtml(str = '') {
   }[m]));
 }
 
+// Reject any URL whose scheme isn't http/https. Prevents javascript:/data: XSS
+// via untrusted href values that pass through the network from upstream.
+function safeUrl(u) {
+  if (!u) return null;
+  try {
+    const url = new URL(u, location.origin);
+    return (url.protocol === 'https:' || url.protocol === 'http:') ? url.href : null;
+  } catch (_) { return null; }
+}
+
 // ─── Rendering ────────────────────────────────────────────────────────────────
 function render() {
   if (authError) { renderAuthError(); return; }
@@ -660,7 +670,12 @@ function renderCardDetails(o, rider) {
       <div class="zoh-section">
         <div class="zoh-label">Address</div>
         <div>${escapeHtml(addr)}</div>
-        ${loc ? `<a class="zoh-link" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${loc.latitude},${loc.longitude}">Open in Maps</a>` : ''}
+        ${(() => {
+          const lat = Number(loc?.latitude), lng = Number(loc?.longitude);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return '';
+          const url = safeUrl(`https://www.google.com/maps?q=${lat},${lng}`);
+          return url ? `<a class="zoh-link" target="_blank" rel="noopener" href="${escapeHtml(url)}">Open in Maps</a>` : '';
+        })()}
       </div>
       <div class="zoh-section">
         <div class="zoh-label">Items</div>
@@ -678,7 +693,10 @@ function renderCardDetails(o, rider) {
         </div>
         ${rider.phone ? `<a class="zoh-link" href="tel:${escapeHtml(rider.phone)}">${escapeHtml(rider.phone)}</a>` : ''}
       </div>` : ''}
-      ${c.profileUrl ? `<a class="zoh-link" href="${c.profileUrl}" target="_blank" rel="noopener">View Zomato profile →</a>` : ''}
+      ${(() => {
+        const url = safeUrl(c.profileUrl);
+        return url ? `<a class="zoh-link" href="${escapeHtml(url)}" target="_blank" rel="noopener">View Zomato profile →</a>` : '';
+      })()}
     </div>
   `;
 }
