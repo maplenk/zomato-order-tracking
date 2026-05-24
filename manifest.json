@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Zomato Partner Order Helper",
+  "short_name": "Order Helper",
+  "version": "1.0.0",
+  "description": "See all active Zomato Partner orders in one panel — customer, items, OTP, rider ETA, and an audible alert when a rider is assigned.",
+  "host_permissions": [
+    "https://www.zomato.com/partners/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://www.zomato.com/partners/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["inject.js", "panel.css"],
+      "matches": ["https://www.zomato.com/*"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
